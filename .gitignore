@@ -1,0 +1,22 @@
+﻿# Python
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/.env
+backend/access_token.txt
+backend/*.log
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Data files (large parquets)
+backend/data/
+
+# Playwright test scripts
+frontend/pw_*.mjs
+frontend/pw_*.js
+
+# OS
+.DS_Store
+Thumbs.db

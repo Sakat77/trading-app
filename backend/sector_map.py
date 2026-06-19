@@ -1,0 +1,18 @@
+SECTOR_INDICES = {
+    "Nifty Bank":               "NSE:NIFTYBANK-INDEX",
+    "Nifty IT":                 "NSE:NIFTYIT-INDEX",
+    "Nifty Auto":               "NSE:NIFTYAUTO-INDEX",
+    "Nifty FMCG":               "NSE:NIFTYFMCG-INDEX",
+    "Nifty Pharma":             "NSE:NIFTYPHARMA-INDEX",
+    "Nifty Metal":              "NSE:NIFTYMETAL-INDEX",
+    "Nifty Realty":             "NSE:NIFTYREALTY-INDEX",
+    "Nifty Media":              "NSE:NIFTYMEDIA-INDEX",
+    "Nifty PSU Bank":           "NSE:NIFTYPSUBANK-INDEX",
+    "Nifty Private Bank":       "NSE:NIFTYPVTBANK-INDEX",
+    "Nifty Financial Services": "NSE:FINNIFTY-INDEX",
+    "Nifty Energy":             "NSE:NIFTYENERGY-INDEX",
+    "Nifty Infra":              "NSE:NIFTYINFRA-INDEX",
+    "Nifty Consumption":        "NSE:NIFTYCONSUMPTION-INDEX",
+    "Nifty Commodities":        "NSE:NIFTYCOMMODITIES-INDEX",
+    "Nifty MNC":                "NSE:NIFTYMNC-INDEX",
+}

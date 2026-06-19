@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell($proc = Get-NetTCPConnection -LocalPort 8765 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty OwningProcess; if \\($proc\\) { Stop-Process -Id $proc -Force; Write-Host \"killed $proc\" }; Start-Sleep -Seconds 1; cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe main.py)",
+      "PowerShell(netstat *)",
+      "Skill(run)",
+      "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe main.py' -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 2; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\frontend; npm run dev' -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 4; Start-Process \"http://localhost:5173\")",
+      "PowerShell(Read-Host *)",
+      "PowerShell(Start-Process \"http://localhost:5174\")",
+      "PowerShell(cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; Start-Process powershell -ArgumentList '-NoExit', '-Command', '.\\\\venv\\\\Scripts\\\\python.exe main.py' -WindowStyle Normal)",
+      "PowerShell(cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\frontend; Start-Process powershell -ArgumentList '-NoExit', '-Command', 'npm run dev' -WindowStyle Normal)",
+      "PowerShell(Start-Sleep -Seconds 5; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait\\('%{PRTSC}'\\); Start-Sleep -Milliseconds 500; $img = [System.Windows.Forms.Clipboard]::GetImage\\(\\); $img.Save\\('C:\\\\Users\\\\MAA\\\\Desktop\\\\chart_test.png'\\))",
+      "PowerShell(Get-Process *)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri 'http://localhost:5173' -TimeoutSec 5 -UseBasicParsing; \"HTTP $\\($r.StatusCode\\) — frontend responding OK\" } catch { \"Error: $_\" })",
+      "PowerShell(cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; Start-Process -NoNewWindow -FilePath \".\\\\venv\\\\Scripts\\\\python.exe\" -ArgumentList \"main.py\" -RedirectStandardOutput \"$env:TEMP\\\\backend_out.txt\" -RedirectStandardError \"$env:TEMP\\\\backend_err.txt\")",
+      "PowerShell(npm list *)",
+      "PowerShell($gitPaths = @\\(\"C:\\\\Program Files\\\\Git\\\\bin\\\\git.exe\",\"C:\\\\Program Files\\\\Git\\\\cmd\\\\git.exe\",\"C:\\\\Git\\\\bin\\\\git.exe\"\\); foreach \\($p in $gitPaths\\) { if \\(Test-Path $p\\) { Write-Output \"Found: $p\"; break } })",
+      "PowerShell(winget install *)",
+      "PowerShell(choco *)",
+      "PowerShell(Invoke-WebRequest -Uri \"https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe\" -OutFile \"$env:TEMP\\\\GitInstaller.exe\" -UseBasicParsing; Write-Output \"Downloaded\")",
+      "PowerShell(Start-Process -FilePath \"$env:TEMP\\\\GitInstaller.exe\" -ArgumentList \"/VERYSILENT\", \"/NORESTART\", \"/NOCANCEL\", \"/SP-\", \"/CLOSEAPPLICATIONS\", \"/RESTARTAPPLICATIONS\", \"/COMPONENTS=icons,ext\\\\reg\\\\shellhere,assoc,assoc_sh\" -Wait; Write-Output \"Git installation complete\")",
+      "PowerShell(git *)"
+    ]
+  }
+}
