@@ -47,8 +47,13 @@ export default function OverviewDashboard({ ws, wsReady, active }) {
       try {
         const d = JSON.parse(e.data)
         if (d.type === 'overview') {
-          setData(d.timeframes || [])
-          setLoading(false)
+          if (d.loading) {
+            // Cache not ready yet — keep spinner, background task will push when done
+            setLoading(true)
+          } else {
+            setData(d.timeframes || [])
+            setLoading(false)
+          }
         }
       } catch {}
     }

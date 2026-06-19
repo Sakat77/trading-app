@@ -59,7 +59,14 @@ export default function SectorDashboard({ ws, wsReady, active }) {
     function onMsg(e) {
       const d = JSON.parse(e.data)
       if (d.type !== 'sector_data') return
-      const sorted = d.sectors.slice().sort(function(a, b) { return b.change_pct - a.change_pct })
+      if (d.loading) {
+        // Cache not ready — keep spinner; background task will push when ready
+        setLoading(true)
+        return
+      }
+      const sorted = d.sectors.slice().sort(function(a, b) {
+        return (b.change_pct || 0) - (a.change_pct || 0)
+      })
       setSectors(sorted)
       setLoading(false)
       setLastUpdate(new Date().toLocaleTimeString())

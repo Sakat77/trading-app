@@ -1,10 +1,12 @@
 import asyncio
 import websockets
 import json
+import multiprocessing
 import pandas as pd
 import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from screener import run_screener
+from screener import run_screener, get_latest_signals as _get_latest_sigs
 from fno_symbols import FNO_SYMBOLS
 from config import DATA_FOLDER
 from xma_indicator import calculate_xma
@@ -22,6 +24,20 @@ from sector_signals import (
     get_sector_tags, classify_symbol as classify_sym,
 )
 
+try:
+    import polars as pl
+    _HAS_POLARS = True
+except ImportError:
+    _HAS_POLARS = False
+
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
+TAIL_BARS        = 200   # bars fed to indicators in the hot path
+REFRESH_INTERVAL = 60    # seconds between background cache refreshes
+CACHE            = {"overview": None, "sectors": None}
+_COMPUTE_WORKERS = min(8, multiprocessing.cpu_count())
+
 # Reverse map: clean symbol -> sector name (built once at import)
 _STOCK_SECTOR_CLEAN = {
     s.replace(':', '_').replace('-', '_'): sec
@@ -29,6 +45,31 @@ _STOCK_SECTOR_CLEAN = {
 }
 
 connected_clients = set()
+
+
+# ---------------------------------------------------------------------------
+# Fast parquet tail reader
+# ---------------------------------------------------------------------------
+def _read_tail_parquet(filepath, n=TAIL_BARS):
+    """Read only the last n rows of a parquet. Uses polars when available."""
+    if _HAS_POLARS:
+        try:
+            df_pl = pl.read_parquet(filepath)
+            if len(df_pl) > n:
+                df_pl = df_pl.tail(n)
+            df = df_pl.to_pandas()
+            for col in ("datetime", "index", "__index_level_0__"):
+                if col in df.columns:
+                    df = df.rename(columns={col: "datetime"}).set_index("datetime")
+                    break
+            return df
+        except Exception:
+            pass
+    df = pd.read_parquet(filepath)
+    df = df.reset_index().set_index("datetime")
+    if len(df) > n:
+        df = df.iloc[-n:]
+    return df
 
 
 def load_sector_summary(timeframe):
@@ -220,6 +261,134 @@ def load_symbol_data(symbol, timeframe, settings, cs1, cs2):
 
     return candles, indicators, custom1, signals1, custom2, signals2, xma, sd_zones
 
+# ---------------------------------------------------------------------------
+# Background compute functions (run in thread pool, never on the event loop)
+# ---------------------------------------------------------------------------
+
+def _process_one_option_for_overview(args):
+    """Thread worker: one ATM symbol × all TFs → list of (tf, sym, tag, log_events)."""
+    sym, info, cs1, cs2 = args
+    ce_files  = info.get("ce_files") or {}
+    pe_files  = info.get("pe_files") or {}
+    ce_strike = info.get("ce_strike")
+    pe_strike = info.get("pe_strike")
+    clean_sym = sym.replace(":", "_").replace("-", "_")
+    results   = []
+
+    for tf in ("15min", "30min", "1hour", "3hour"):
+        ce_fp = ce_files.get(tf)
+        pe_fp = pe_files.get(tf)
+        ce_rvi = ce_rsi = pe_rvi = pe_rsi = None
+        log_events = []
+
+        for fp, opt_type, strike in ((ce_fp, "CE", ce_strike), (pe_fp, "PE", pe_strike)):
+            if not fp or not os.path.exists(fp):
+                continue
+            try:
+                df = _read_tail_parquet(fp)
+                if len(df) < 30:
+                    continue
+                c1, _ = calculate_eata_pollan_cci_rsi(df,
+                    cci_per=cs1["cci_per"], rsi_per=cs1["rsi_per"],
+                    ma_period=cs1["ma_period"], koef=cs1["koef"])
+                c2, _ = calculate_eata_pollan_cci_rvi(df,
+                    cci_per=cs2["cci_per"], rvi_per=cs2["rvi_per"],
+                    ma_period=cs2["ma_period"], koef=cs2["koef"])
+                rsi_sigs = _get_latest_sigs(df, c1, n=3)
+                rvi_sigs = _get_latest_sigs(df, c2, n=3)
+                rsi_last = rsi_sigs[-1]["type"] if rsi_sigs else None
+                rvi_last = rvi_sigs[-1]["type"] if rvi_sigs else None
+                if opt_type == "CE":
+                    ce_rvi, ce_rsi = rvi_last, rsi_last
+                else:
+                    pe_rvi, pe_rsi = rvi_last, rsi_last
+                # Log only recent signals — full history is for backfill_signals.py
+                log_events.extend(build_events(rsi_sigs, clean_sym, opt_type, tf, "CCI-RSI", strike))
+                log_events.extend(build_events(rvi_sigs, clean_sym, opt_type, tf, "CCI-RVI", strike))
+            except Exception:
+                pass
+
+        bull_score = (1 if ce_rvi == "buy" else 0) + (1 if pe_rsi == "sell" else 0)
+        bear_score = (1 if pe_rvi == "buy" else 0) + (1 if ce_rsi == "sell" else 0)
+        tag = "bull" if bull_score > bear_score else "bear" if bear_score > bull_score else "neutral"
+        results.append((tf, sym, tag, log_events))
+
+    return results
+
+
+def _compute_overview_sync():
+    cs1 = {"cci_per": 14, "rsi_per": 14, "ma_period": 2, "koef": 8}
+    cs2 = {"cci_per": 14, "rvi_per": 10, "ma_period": 2, "koef": 8}
+
+    atm_path = os.path.join(DATA_FOLDER, "options", "atm_map.json")
+    if not os.path.exists(atm_path):
+        return []
+    with open(atm_path) as f:
+        atm_map = json.load(f)
+
+    tf_acc     = {tf: {"bull": 0, "bear": 0, "neutral": 0, "symbols": []}
+                  for tf in ("15min", "30min", "1hour", "3hour")}
+    all_events = []
+    tasks      = [(sym, info, cs1, cs2) for sym, info in atm_map.items()]
+
+    with ThreadPoolExecutor(max_workers=_COMPUTE_WORKERS) as pool:
+        futures = [pool.submit(_process_one_option_for_overview, t) for t in tasks]
+        for future in as_completed(futures):
+            try:
+                for tf, sym, tag, evts in future.result():
+                    tf_acc[tf][tag] += 1
+                    tf_acc[tf]["symbols"].append({"symbol": sym, "tag": tag})
+                    all_events.extend(evts)
+            except Exception as e:
+                print(f"[overview] worker error: {e}")
+
+    log_signals(all_events)
+
+    out = []
+    for tf in ("15min", "30min", "1hour", "3hour"):
+        r     = tf_acc[tf]
+        total = r["bull"] + r["bear"] + r["neutral"] or 1
+        out.append({
+            "tf": tf, "bull": r["bull"], "bear": r["bear"], "neutral": r["neutral"],
+            "bull_pct": round(r["bull"] / total * 100),
+            "bear_pct": round(r["bear"] / total * 100),
+            "symbols":  r["symbols"],
+        })
+    return out
+
+
+def _compute_sectors_sync():
+    return build_sectors_payload()
+
+
+async def background_refresh():
+    """Recomputes overview + sectors every REFRESH_INTERVAL s; broadcasts to connected clients."""
+    loop = asyncio.get_event_loop()
+    while True:
+        # Overview
+        try:
+            result = await loop.run_in_executor(None, _compute_overview_sync)
+            CACHE["overview"] = result
+            if connected_clients and result:
+                msg = json.dumps({"type": "overview", "timeframes": result})
+                await asyncio.gather(*(c.send(msg) for c in set(connected_clients)),
+                                     return_exceptions=True)
+            total_syms = sum(r["bull"] + r["bear"] + r["neutral"] for r in result)
+            print(f"[cache] overview refreshed — {total_syms} symbols across 4 TFs")
+        except Exception as e:
+            print(f"[cache] overview error: {e}")
+
+        # Sectors (price merged per-request from load_sector_summary, not cached here)
+        try:
+            result = await loop.run_in_executor(None, _compute_sectors_sync)
+            CACHE["sectors"] = result
+            print(f"[cache] sectors refreshed — {len(result.get('sectors', []))} sectors")
+        except Exception as e:
+            print(f"[cache] sectors error: {e}")
+
+        await asyncio.sleep(REFRESH_INTERVAL)
+
+
 async def handle_client(websocket):
     connected_clients.add(websocket)
     print(f"Frontend connected. Total: {len(connected_clients)}")
@@ -324,138 +493,41 @@ async def handle_client(websocket):
 
             elif t == "get_sector_data":
                 req_tf = data.get("timeframe", "15min")
-                scr_cs1 = data.get("cs1", {"cci_per":14,"rsi_per":14,"ma_period":2,"koef":8})
-                scr_cs2 = data.get("cs2", {"cci_per":14,"rvi_per":10,"ma_period":2,"koef":8})
-                loop = asyncio.get_event_loop()
-                try:
-                    payload = await loop.run_in_executor(
-                        None, lambda: build_sectors_payload(scr_cs1, scr_cs2)
-                    )
-                    # Merge price data from load_sector_summary into the signal payload
+                cached = CACHE["sectors"]
+                if cached is None:
+                    await websocket.send(json.dumps({
+                        "type": "sector_data", "timeframe": req_tf,
+                        "sectors": [], "loading": True
+                    }))
+                    print("[sectors] cache not ready, sent loading flag")
+                else:
+                    # Merge cheap price data (no indicators) with cached signal tags
                     price_map = {s["name"]: s for s in load_sector_summary(req_tf)}
-                    for sec in payload.get("sectors", []):
-                        price = price_map.get(sec["name"], {})
-                        sec["current"]    = price.get("current")
-                        sec["change_pct"] = price.get("change_pct")
-                        sec["sparkline"]  = price.get("sparkline", [])
-                        sec["stock_count"]= price.get("stock_count", len(sec.get("stocks", [])))
+                    sectors = []
+                    for sec in cached.get("sectors", []):
+                        p = price_map.get(sec["name"], {})
+                        sectors.append({**sec,
+                            "current":    p.get("current"),
+                            "change":     p.get("change"),
+                            "change_pct": p.get("change_pct"),
+                            "sparkline":  p.get("sparkline", []),
+                            "stock_count": p.get("stock_count", len(sec.get("stocks", []))),
+                        })
                     await websocket.send(json.dumps({
-                        "type":      "sector_data",
-                        "timeframe": req_tf,
-                        "sectors":   payload.get("sectors", []),
+                        "type": "sector_data", "timeframe": req_tf, "sectors": sectors
                     }))
-                    print(f"Sector data sent: {len(payload.get('sectors', []))} sectors @ {req_tf}")
-                except Exception as e:
-                    print(f"Sector data error: {e}")
-                    await websocket.send(json.dumps({
-                        "type": "sector_data", "timeframe": req_tf, "sectors": []
-                    }))
+                    print(f"[sectors] cache served: {len(sectors)} sectors @ {req_tf}")
 
             elif t == "get_overview":
-                scr_cs1 = data.get("cs1", {"cci_per":14,"rsi_per":14,"ma_period":2,"koef":8})
-                scr_cs2 = data.get("cs2", {"cci_per":14,"rvi_per":10,"ma_period":2,"koef":8})
-                loop = asyncio.get_event_loop()
-
-                def _compute_overview():
-                    opts_folder = os.path.join(DATA_FOLDER, "options")
-                    atm_path    = os.path.join(opts_folder, "atm_map.json")
-                    if not os.path.exists(atm_path):
-                        return []
-                    with open(atm_path) as f:
-                        atm_map = json.load(f)
-
-                    tf_results = {tf: {"bull": 0, "bear": 0, "neutral": 0, "symbols": []}
-                                  for tf in ["15min", "30min", "1hour", "3hour"]}
-                    log_events = []
-                    now_str    = datetime.utcnow().isoformat()
-
-                    for sym, info in atm_map.items():
-                        ce_files = info.get("ce_files") or {}
-                        pe_files = info.get("pe_files") or {}
-                        ce_strike = info.get("ce_strike")
-                        pe_strike = info.get("pe_strike")
-                        clean_sym = sym.replace(":", "_").replace("-", "_")
-
-                        for tf in ["15min", "30min", "1hour", "3hour"]:
-                            ce_fp = ce_files.get(tf)
-                            pe_fp = pe_files.get(tf)
-
-                            ce_rvi = ce_rsi = pe_rvi = pe_rsi = None
-
-                            for fp, opt_type, strike in [
-                                (ce_fp, "CE", ce_strike), (pe_fp, "PE", pe_strike)
-                            ]:
-                                if not fp or not os.path.exists(fp):
-                                    continue
-                                try:
-                                    df = pd.read_parquet(fp)
-                                    df = df.reset_index().set_index("datetime")
-                                    if len(df) < 30:
-                                        continue
-                                    c1, s1 = calculate_eata_pollan_cci_rsi(df,
-                                        cci_per=scr_cs1["cci_per"], rsi_per=scr_cs1["rsi_per"],
-                                        ma_period=scr_cs1["ma_period"], koef=scr_cs1["koef"])
-                                    c2, s2 = calculate_eata_pollan_cci_rvi(df,
-                                        cci_per=scr_cs2["cci_per"], rvi_per=scr_cs2["rvi_per"],
-                                        ma_period=scr_cs2["ma_period"], koef=scr_cs2["koef"])
-
-                                    from screener import get_latest_signals
-                                    rsi_sigs = get_latest_signals(df, c1, n=5)
-                                    rvi_sigs = get_latest_signals(df, c2, n=5)
-
-                                    rsi_last = rsi_sigs[-1]["type"] if rsi_sigs else None
-                                    rvi_last = rvi_sigs[-1]["type"] if rvi_sigs else None
-
-                                    if opt_type == "CE":
-                                        ce_rvi, ce_rsi = rvi_last, rsi_last
-                                    else:
-                                        pe_rvi, pe_rsi = rvi_last, rsi_last
-
-                                    log_events += build_events(s1, clean_sym, opt_type, tf, "CCI-RSI", strike)
-                                    log_events += build_events(s2, clean_sym, opt_type, tf, "CCI-RVI", strike)
-                                except Exception:
-                                    pass
-
-                            # Bucketing: CE CCI-RVI buy → bullish; PE CCI-RSI sell → bullish
-                            #            PE CCI-RVI buy → bearish; CE CCI-RSI sell → bearish
-                            bull_score = (1 if ce_rvi == "buy"  else 0) + (1 if pe_rsi == "sell" else 0)
-                            bear_score = (1 if pe_rvi == "buy"  else 0) + (1 if ce_rsi == "sell" else 0)
-                            if bull_score > bear_score:
-                                tag = "bull"
-                            elif bear_score > bull_score:
-                                tag = "bear"
-                            else:
-                                tag = "neutral"
-
-                            tf_results[tf][tag] += 1
-                            tf_results[tf]["symbols"].append({"symbol": sym, "tag": tag})
-
-                    log_signals(log_events)
-
-                    out = []
-                    for tf in ["15min", "30min", "1hour", "3hour"]:
-                        r = tf_results[tf]
-                        total = r["bull"] + r["bear"] + r["neutral"] or 1
-                        out.append({
-                            "tf":      tf,
-                            "bull":    r["bull"],
-                            "bear":    r["bear"],
-                            "neutral": r["neutral"],
-                            "bull_pct": round(r["bull"] / total * 100),
-                            "bear_pct": round(r["bear"] / total * 100),
-                            "symbols": r["symbols"],
-                        })
-                    return out
-
-                try:
-                    tf_data = await loop.run_in_executor(None, _compute_overview)
+                cached = CACHE["overview"]
+                if cached is None:
                     await websocket.send(json.dumps({
-                        "type": "overview", "timeframes": tf_data
+                        "type": "overview", "timeframes": [], "loading": True
                     }))
-                    print(f"Overview sent: {len(tf_data)} timeframes")
-                except Exception as e:
-                    print(f"Overview error: {e}")
-                    await websocket.send(json.dumps({"type": "overview", "timeframes": []}))
+                    print("[overview] cache not ready, sent loading flag")
+                else:
+                    await websocket.send(json.dumps({"type": "overview", "timeframes": cached}))
+                    print(f"[overview] cache served: {len(cached)} TFs")
 
             elif t == "run_screener":
                 scr_cs1 = data.get("cs1", {"cci_per":14,"rsi_per":14,"ma_period":2,"koef":8})
@@ -463,10 +535,14 @@ async def handle_client(websocket):
                 print("Running screener for all F&O stocks...")
                 loop = asyncio.get_event_loop()
                 try:
-                    # Pre-compute sector tags (fast — 16 indices × 4 TFs)
-                    sector_tags = await loop.run_in_executor(
-                        None, lambda: get_sector_tags(scr_cs1, scr_cs2)
-                    )
+                    # Use cached sector tags if available; otherwise compute (fast — 16 × 4 TFs)
+                    _cached_sec = CACHE.get("sectors")
+                    if _cached_sec:
+                        sector_tags = {s["name"]: s["tag"] for s in _cached_sec.get("sectors", [])}
+                    else:
+                        sector_tags = await loop.run_in_executor(
+                            None, lambda: get_sector_tags(scr_cs1, scr_cs2)
+                        )
 
                     log_events = []
                     def _log_cb(symbol, tf, sig1, sig2):
@@ -508,8 +584,9 @@ async def handle_client(websocket):
 async def main():
     init_db()
     print("Starting trading app backend...")
-    print("WebSocket server running on ws://localhost:8765")
+    print(f"WebSocket server on ws://localhost:8765 | workers={_COMPUTE_WORKERS} | tail={TAIL_BARS} bars | refresh={REFRESH_INTERVAL}s")
     async with websockets.serve(handle_client, "localhost", 8765, max_size=20*1024*1024):
+        asyncio.create_task(background_refresh())   # starts immediately, non-blocking
         await asyncio.Future()
 
 if __name__ == "__main__":
