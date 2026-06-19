@@ -5,6 +5,7 @@ import TabBar from './TabBar'
 import SectorDashboard from './SectorDashboard'
 import OptionsView from './OptionsView'
 import TripleChart from './TripleChart'
+import OverviewDashboard from './OverviewDashboard'
 
 const WS_URL          = 'ws://localhost:8765'
 const IST_OFFSET      = 19800 // UTC+5:30 in seconds
@@ -599,7 +600,7 @@ export default function App() {
       <TabBar
         active={activeSection}
         onChange={setActiveSection}
-        tabs={[{id:'charts',label:'Chart'},{id:'sectors',label:'Sectors'},{id:'options',label:'Options'},{id:'analysis',label:'3-Chart'}]}
+        tabs={[{id:'charts',label:'Chart'},{id:'overview',label:'Overview'},{id:'sectors',label:'Sectors'},{id:'options',label:'Options'},{id:'analysis',label:'3-Chart'}]}
       />
 
       <div style={{ flex:1, minHeight:0, display: activeSection==='charts' ? 'flex' : 'none' }}>
@@ -820,6 +821,10 @@ export default function App() {
       </div>
 
       </div>{/* end Charts wrapper */}
+
+      <div style={{ flex:1, minHeight:0, display: activeSection==='overview' ? 'block' : 'none' }}>
+        <OverviewDashboard ws={wsRef.current} wsReady={wsReady} active={activeSection==='overview'} />
+      </div>
 
       <div style={{ flex:1, minHeight:0, display: activeSection==='sectors' ? 'block' : 'none' }}>
         <SectorDashboard ws={wsRef.current} wsReady={wsReady} active={activeSection==='sectors'} />

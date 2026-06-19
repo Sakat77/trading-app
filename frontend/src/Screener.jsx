@@ -171,17 +171,18 @@ export default function Screener({ ws, cs1, cs2, onSelectSymbol, activeSymbol })
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'12px' }}>
             <thead>
               <tr>
-                <th style={Object.assign({},thBase,{textAlign:'left', paddingLeft:'14px', width:'18%'})}>Stock</th>
+                <th style={Object.assign({},thBase,{textAlign:'left', paddingLeft:'14px', width:'14%'})}>Stock</th>
                 {TF_LABELS.map(function(label, i){
                   return (
-                    <th key={i} style={Object.assign({},thBase,{textAlign:'center', width:'13%'})}>
+                    <th key={i} style={Object.assign({},thBase,{textAlign:'center', width:'11%'})}>
                       {label}<br/>
                       <span style={{ color:'#444', fontSize:'10px' }}>RSI &nbsp; RVI</span>
                     </th>
                   )
                 })}
-                <th style={Object.assign({},thBase,{textAlign:'left', width:'18%'})}>Strategy</th>
-                <th style={Object.assign({},thBase,{textAlign:'right', paddingRight:'14px', width:'11%'})}>P&L</th>
+                <th style={Object.assign({},thBase,{textAlign:'left', width:'12%'})}>Sector</th>
+                <th style={Object.assign({},thBase,{textAlign:'left', width:'16%'})}>Strategy</th>
+                <th style={Object.assign({},thBase,{textAlign:'right', paddingRight:'14px', width:'10%'})}>P&L</th>
               </tr>
             </thead>
             <tbody>
@@ -221,6 +222,19 @@ export default function Screener({ ws, cs1, cs2, onSelectSymbol, activeSymbol })
                         </td>
                       )
                     })}
+
+                    <td style={{ padding:'6px 8px', verticalAlign:'middle' }}>
+                      {r.sector_name ? (
+                        <div>
+                          <div style={{ fontSize:'11px', color:'#d1d4dc', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:100 }}>{r.sector_name}</div>
+                          <span style={{
+                            display:'inline-block', marginTop:2, padding:'1px 5px', borderRadius:3, fontSize:10, fontWeight:600, textTransform:'uppercase',
+                            background: r.sector_tag==='bull' ? '#0d2e1a' : r.sector_tag==='bear' ? '#2e0d0d' : '#1a1a1a',
+                            color:       r.sector_tag==='bull' ? '#26a69a' : r.sector_tag==='bear' ? '#ef5350' : '#555',
+                          }}>{r.sector_tag || 'neutral'}</span>
+                        </div>
+                      ) : <span style={{ color:'#333', fontSize:'12px' }}>—</span>}
+                    </td>
 
                     <td style={{ padding:'8px', verticalAlign:'middle' }}>
                       {r.strategy_signal ? (

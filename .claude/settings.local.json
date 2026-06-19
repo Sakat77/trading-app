@@ -23,7 +23,11 @@
       "PowerShell(choco *)",
       "PowerShell(Invoke-WebRequest -Uri \"https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.1/Git-2.47.1-64-bit.exe\" -OutFile \"$env:TEMP\\\\GitInstaller.exe\" -UseBasicParsing; Write-Output \"Downloaded\")",
       "PowerShell(Start-Process -FilePath \"$env:TEMP\\\\GitInstaller.exe\" -ArgumentList \"/VERYSILENT\", \"/NORESTART\", \"/NOCANCEL\", \"/SP-\", \"/CLOSEAPPLICATIONS\", \"/RESTARTAPPLICATIONS\", \"/COMPONENTS=icons,ext\\\\reg\\\\shellhere,assoc,assoc_sh\" -Wait; Write-Output \"Git installation complete\")",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "PowerShell(gh *)",
+      "PowerShell(Start-Process \"http://localhost:5173\")",
+      "PowerShell(Start-Sleep -Seconds 4; try { $r = Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 5; \"Status: $\\($r.StatusCode\\)\" } catch { \"Not ready: $_\" })",
+      "PowerShell(git add *)"
     ]
   }
 }

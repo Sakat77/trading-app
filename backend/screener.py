@@ -42,7 +42,7 @@ def get_last_signal(signals):
         return None
     return signals[-1]
 
-def run_screener(symbols, cs1=None, cs2=None):
+def run_screener(symbols, cs1=None, cs2=None, log_callback=None):
     if cs1 is None:
         cs1 = {'cci_per': 14, 'rsi_per': 14, 'ma_period': 2, 'koef': 8}
     if cs2 is None:
@@ -65,14 +65,14 @@ def run_screener(symbols, cs1=None, cs2=None):
                     break
                 tf_data[tf] = df
 
-                custom1, _ = calculate_eata_pollan_cci_rsi(
+                custom1, sig1 = calculate_eata_pollan_cci_rsi(
                     df,
                     cci_per=cs1['cci_per'],
                     rsi_per=cs1['rsi_per'],
                     ma_period=cs1['ma_period'],
                     koef=cs1['koef']
                 )
-                custom2, _ = calculate_eata_pollan_cci_rvi(
+                custom2, sig2 = calculate_eata_pollan_cci_rvi(
                     df,
                     cci_per=cs2['cci_per'],
                     rvi_per=cs2['rvi_per'],
@@ -82,6 +82,9 @@ def run_screener(symbols, cs1=None, cs2=None):
 
                 tf_signals_rsi[tf] = get_latest_signals(df, custom1, n=3)
                 tf_signals_rvi[tf] = get_latest_signals(df, custom2, n=3)
+
+                if log_callback:
+                    log_callback(symbol, tf, sig1, sig2)
 
             if not all_ok:
                 continue

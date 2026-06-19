@@ -3,6 +3,23 @@ import { useState, useEffect } from 'react'
 const TIMEFRAMES = ['15min', '30min', '1hour', '3hour']
 const TF_LABELS  = { '15min': '15m', '30min': '30m', '1hour': '1h', '3hour': '3h' }
 
+const TAG_COLORS = {
+  bull:    { bg: '#0d2e1a', color: '#26a69a' },
+  bear:    { bg: '#2e0d0d', color: '#ef5350' },
+  neutral: { bg: '#1a1a1a', color: '#666' },
+}
+
+function TagBadge({ tag }) {
+  const c = TAG_COLORS[tag] || TAG_COLORS.neutral
+  return (
+    <span style={{
+      display: 'inline-block', padding: '1px 5px', borderRadius: 3,
+      fontSize: 10, fontWeight: 600, textTransform: 'uppercase',
+      background: c.bg, color: c.color,
+    }}>{tag || 'neutral'}</span>
+  )
+}
+
 function Sparkline({ data, positive }) {
   if (!data || data.length < 2) return null
   const W = 80, H = 32, PAD = 2
@@ -119,8 +136,11 @@ export default function SectorDashboard({ ws, wsReady, active }) {
                     style={{ padding: '12px', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
 
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ color: '#d1d4dc', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {s.name}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ color: '#d1d4dc', fontSize: '12px', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {s.name}
+                        </span>
+                        {s.tag && <TagBadge tag={s.tag} />}
                       </div>
                       <div style={{ color: '#555', fontSize: '11px', marginTop: '3px' }}>
                         {s.stock_count} stocks&nbsp;
@@ -131,12 +151,18 @@ export default function SectorDashboard({ ws, wsReady, active }) {
                     <Sparkline data={s.sparkline} positive={isPos} />
 
                     <div style={{ textAlign: 'right', flexShrink: 0, minWidth: '96px' }}>
-                      <div style={{ color: '#e6e8ec', fontSize: '14px', fontWeight: '600' }}>
-                        {s.current.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </div>
-                      <div style={{ color: accentColor, fontSize: '11px', fontWeight: '500', marginTop: '2px' }}>
-                        {isPos ? '+' : ''}{s.change} ({isPos ? '+' : ''}{s.change_pct}%)
-                      </div>
+                      {s.current != null ? (
+                        <>
+                          <div style={{ color: '#e6e8ec', fontSize: '14px', fontWeight: '600' }}>
+                            {s.current.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </div>
+                          <div style={{ color: accentColor, fontSize: '11px', fontWeight: '500', marginTop: '2px' }}>
+                            {isPos ? '+' : ''}{s.change} ({isPos ? '+' : ''}{s.change_pct}%)
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{ color: '#555', fontSize: '11px' }}>No price</div>
+                      )}
                     </div>
                   </div>
 
@@ -144,12 +170,18 @@ export default function SectorDashboard({ ws, wsReady, active }) {
                     <div style={{ borderTop: '1px solid #1e2535', padding: '8px 12px', background: '#0d1117' }}>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                         {s.stocks.map(function(stock) {
+                          const name = typeof stock === 'object' ? stock.name : stock
+                          const tag  = typeof stock === 'object' ? stock.tag  : null
                           return (
-                            <span key={stock} style={{
+                            <span key={name} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
                               background: '#131722', color: '#b2b5be',
                               border: '1px solid #2a2e39', borderRadius: '3px',
                               fontSize: '11px', padding: '2px 7px',
-                            }}>{stock}</span>
+                            }}>
+                              {name}
+                              {tag && <TagBadge tag={tag} />}
+                            </span>
                           )
                         })}
                       </div>
