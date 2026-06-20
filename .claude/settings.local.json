@@ -29,7 +29,29 @@
       "PowerShell(Start-Sleep -Seconds 4; try { $r = Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing -TimeoutSec 5; \"Status: $\\($r.StatusCode\\)\" } catch { \"Not ready: $_\" })",
       "PowerShell(git add *)",
       "PowerShell(git push *)",
-      "PowerShell(Get-Content *)"
+      "PowerShell(Get-Content *)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(start *)",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe auth.py)",
+      "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe main.py')",
+      "PowerShell($folder = \"$env:USERPROFILE\\\\Desktop\\\\trading-data\"; if \\(Test-Path $folder\\) { Get-ChildItem $folder -Recurse -File | Sort-Object LastWriteTime -Descending | Select-Object -First 5 FullName, LastWriteTime } else { Write-Host \"trading-data folder does not exist\" })",
+      "PowerShell(Start-Process powershell -ArgumentList '-NoExit', '-Command', 'cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe fetch_data.py')",
+      "PowerShell(Start-Sleep -Seconds 3; \\(netstat -ano | Select-String \":8765\"\\).Count)",
+      "PowerShell(Remove-Item *)",
+      "Bash(python3 -c ' *)",
+      "Bash(python -c ' *)",
+      "PowerShell(Start-Sleep -Seconds 5; \\(netstat -ano | Select-String \":8765\"\\).Count)",
+      "PowerShell(start http://localhost:5173)",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend; .\\\\venv\\\\Scripts\\\\python.exe main.py\")",
+      "PowerShell(Test-NetConnection *)",
+      "PowerShell([System.TimeZoneInfo]::Local.DisplayName)",
+      "PowerShell(Copy-Item *)",
+      "Bash(.\\\\venv\\\\Scripts\\\\python.exe -c \"import main; print\\('main.py OK'\\)\")",
+      "PowerShell(Stop-Process *)",
+      "PowerShell(Start-Sleep -Seconds 3; try { $ws = New-Object System.Net.WebSockets.ClientWebSocket; $uri = [System.Uri]\"ws://localhost:8765\"; $ct = [System.Threading.CancellationToken]::None; $task = $ws.ConnectAsync\\($uri, $ct\\); $task.Wait\\(3000\\) | Out-Null; if \\($ws.State -eq 'Open'\\) { Write-Host \"WS connected OK — state: $\\($ws.State\\)\"; $ws.CloseAsync\\([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure, '', $ct\\).Wait\\(1000\\) | Out-Null } else { Write-Host \"WS state: $\\($ws.State\\)\" } } catch { Write-Host \"WS test error: $_\" })",
+      "Bash(.\\\\backend\\\\venv\\\\Scripts\\\\python.exe -c \"import struct; print\\(struct.calcsize\\('P'\\)*8, 'bit Python'\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\MAA\\\\Desktop\\\\trading-app\\\\backend\\\\venv\\\\Scripts\\\\pip.exe\" install pefile -q)",
+      "PowerShell(py *)"
     ]
   }
 }

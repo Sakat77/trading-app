@@ -2,6 +2,7 @@ import os
 import time
 import pandas as pd
 from datetime import datetime, timedelta
+from tz import epoch_series_to_ist
 from fyers_apiv3 import fyersModel
 from config import CLIENT_ID, DATA_FOLDER, TIMEFRAMES, HISTORY_DAYS
 from sector_map import SECTOR_INDICES
@@ -49,7 +50,7 @@ def fetch_and_save(fyers, symbol, timeframe_name, timeframe_value):
             return False
 
         df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
-        df["datetime"] = pd.to_datetime(df["timestamp"], unit="s")
+        df["datetime"] = epoch_series_to_ist(df["timestamp"])
         df = df.set_index("datetime")
 
         clean_symbol = symbol.replace(":", "_").replace("-", "_")

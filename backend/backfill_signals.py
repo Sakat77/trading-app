@@ -13,6 +13,7 @@ import json
 import pandas as pd
 from datetime import datetime
 from signal_log import init_db, log_signals, build_events
+from tz import now_ist
 from custom_indicator import calculate_eata_pollan_cci_rsi, calculate_eata_pollan_cci_rvi
 from sector_map import SECTOR_INDICES
 from fno_symbols import FNO_SYMBOLS
@@ -120,7 +121,7 @@ def main():
 
 
 if __name__ == '__main__':
-    t0 = datetime.utcnow()
+    t0 = now_ist()
     main()
-    elapsed = (datetime.utcnow() - t0).total_seconds()
+    elapsed = (now_ist() - t0).total_seconds()
     print(f"Elapsed: {elapsed:.1f}s")

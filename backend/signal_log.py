@@ -1,7 +1,7 @@
 import sqlite3
 import os
-from datetime import datetime
 from config import DATA_FOLDER
+from tz import epoch_to_ist, now_ist
 
 DB_PATH = os.path.join(DATA_FOLDER, 'signals.db')
 
@@ -46,11 +46,11 @@ def log_signals(events):
 
 def build_events(signals, symbol, market_type, timeframe, indicator, strike=None):
     """Convert a list of {type, time, price} signal dicts to loggable events."""
-    now = datetime.utcnow().isoformat()
+    now = now_ist().isoformat()
     events = []
     for sig in (signals or []):
         try:
-            bar_time = datetime.utcfromtimestamp(sig['time']).isoformat()
+            bar_time = epoch_to_ist(sig['time']).isoformat()
         except Exception:
             bar_time = str(sig['time'])
         events.append({

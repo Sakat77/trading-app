@@ -11,12 +11,6 @@ const WS_URL          = 'ws://localhost:8765'
 const IST_OFFSET      = 19800 // UTC+5:30 in seconds
 const RIGHT_PADDING   = 60    // empty bars kept to the right of the last candle (~40% of view)
 
-const SYMBOLS = [
-  'NSE_RELIANCE_EQ','NSE_TCS_EQ','NSE_INFY_EQ','NSE_HDFCBANK_EQ',
-  'NSE_ICICIBANK_EQ','NSE_SBIN_EQ','NSE_AXISBANK_EQ','NSE_KOTAKBANK_EQ',
-  'NSE_BAJFINANCE_EQ','NSE_TATAMOTORS_EQ','NSE_WIPRO_EQ','NSE_HINDUNILVR_EQ',
-  'NSE_MARUTI_EQ','NSE_SUNPHARMA_EQ','NSE_BHARTIARTL_EQ'
-]
 const TIMEFRAMES = ['15min','30min','1hour','3hour']
 const DS  = { cci_period:20, rsi_period:14, rvi_period:10, cci_color:'#e91e63', rsi_color:'#2196f3', rvi_color:'#ff9800', rvi_signal_color:'#9c27b0' }
 const DC1 = { cci_per:14, rsi_per:14, ma_period:2, koef:8, buy_arrows:true, sell_arrows:true, buy_color:'#00ff00', sell_color:'#ff0000', buy_size:2, sell_size:2, buy_alert:true, sell_alert:true, alert_sound:true, alert_popup:true, line1_color:'#1e90ff', line2_color:'#8b0000' }
@@ -43,7 +37,69 @@ const DSD = {
   proven_res_color:'rgba(105,105,105,0.6)',
   weak_width:1, untested_width:1, verified_width:1, proven_width:1,
 }
-const PANES = ['CCI','RSI','RVI','EATA CCI×RSI','EATA CCI×RVI']
+const PANES = ['CCI','RSI','RVI','EATA CCI×RSI','EATA CCI×RVI','BAMSBUNG']
+
+function SymbolPicker({ symbols, value, onChange }) {
+  var [open,  setOpen]  = useState(false)
+  var [query, setQuery] = useState('')
+  var [hover, setHover] = useState(-1)
+  var listRef = useRef(null)
+
+  var label    = value.replace('NSE_', '').replace('_EQ', '')
+  var filtered = query.trim()
+    ? symbols.filter(function(s) {
+        return s.replace('NSE_', '').replace('_EQ', '').toLowerCase().includes(query.toLowerCase())
+      })
+    : symbols
+
+  useEffect(function() {
+    if (hover < 0 || !listRef.current) return
+    var items = listRef.current.querySelectorAll('[data-idx]')
+    if (items[hover]) items[hover].scrollIntoView({ block: 'nearest' })
+  }, [hover])
+
+  function select(sym) { onChange(sym); setOpen(false); setQuery(''); setHover(-1) }
+
+  function onKeyDown(e) {
+    if (!open) { if (e.key !== 'Escape' && e.key !== 'Tab') setOpen(true); return }
+    if (e.key === 'Escape')    { setOpen(false); setQuery(''); setHover(-1); e.preventDefault(); return }
+    if (e.key === 'ArrowDown') { setHover(function(h) { return Math.min(h + 1, filtered.length - 1) }); e.preventDefault(); return }
+    if (e.key === 'ArrowUp')   { setHover(function(h) { return Math.max(h - 1, 0) }); e.preventDefault(); return }
+    if (e.key === 'Enter' && hover >= 0 && filtered[hover]) { select(filtered[hover]); e.preventDefault() }
+  }
+
+  return (
+    <div style={{ position: 'relative', flexShrink: 0 }}>
+      <input
+        value={open ? query : label}
+        placeholder={symbols.length === 0 ? 'Loading...' : 'Search...'}
+        onChange={function(e) { setQuery(e.target.value); setHover(-1) }}
+        onFocus={function() { setOpen(true); setQuery('') }}
+        onBlur={function() { setTimeout(function() { setOpen(false); setQuery(''); setHover(-1) }, 150) }}
+        onKeyDown={onKeyDown}
+        style={{ background:'#1a1a1a', color:'#d1d4dc', border:'1px solid #333', padding:'3px 6px', borderRadius:'5px', fontSize:'12px', width:'110px', outline:'none', cursor:'text' }}
+      />
+      {open && (filtered.length > 0 || query) && (
+        <div ref={listRef} style={{ position:'absolute', top:'100%', left:0, zIndex:200, background:'#1a1a1a', border:'1px solid #333', borderRadius:'4px', maxHeight:'240px', overflowY:'auto', minWidth:'160px', boxShadow:'0 4px 16px rgba(0,0,0,0.8)', marginTop:'2px' }}>
+          {filtered.length === 0
+            ? <div style={{ padding:'8px 10px', fontSize:'11px', color:'#555' }}>No match</div>
+            : filtered.map(function(s, i) {
+                var lab = s.replace('NSE_', '').replace('_EQ', '')
+                return (
+                  <div key={s} data-idx={i}
+                    onMouseDown={function() { select(s) }}
+                    onMouseEnter={function() { setHover(i) }}
+                    style={{ padding:'5px 10px', fontSize:'12px', cursor:'pointer', color:s===value?'#26a69a':'#d1d4dc', background:i===hover?'#2a2a2a':s===value?'#1a2a1a':'transparent' }}>
+                    {lab}
+                  </div>
+                )
+              })
+          }
+        </div>
+      )}
+    </div>
+  )
+}
 
 function loadLayout() {
   try {
@@ -65,6 +121,7 @@ export default function App() {
   const rviRef       = useRef(null)
   const c1Ref        = useRef(null)
   const c2Ref        = useRef(null)
+  const bamsRef      = useRef(null)
   const chartsRef    = useRef({})
   const seriesRef    = useRef({})
   const wsRef        = useRef(null)
@@ -103,9 +160,12 @@ export default function App() {
   const [alerts,       setAlerts]       = useState([])
   const [showAlerts,   setShowAlerts]   = useState(false)
   const [visible,      setVisible]      = useState(saved?.visible || {
-    'CCI':true,'RSI':true,'RVI':true,'EATA CCI×RSI':true,'EATA CCI×RVI':true
+    'CCI':true,'RSI':true,'RVI':true,'EATA CCI×RSI':true,'EATA CCI×RVI':true,'BAMSBUNG':true
   })
   const [screenerVisible, setScreenerVisible] = useState(true)
+  const [symbols,      setSymbols]      = useState([])
+  const [legView,      setLegView]      = useState('EQ')
+  const [optTitle,     setOptTitle]     = useState(null)
 
   useEffect(function() {
     saveLayout({ symbol, timeframe, settings, cs1, cs2, visible, xmaSettings, sdSettings })
@@ -170,7 +230,8 @@ export default function App() {
     const rsiC = makeSubChart(rsiRef.current,  90, false)
     const rviC = makeSubChart(rviRef.current,  90, false)
     const c1C  = makeSubChart(c1Ref.current,  110, false)
-    const c2C  = makeSubChart(c2Ref.current,  110, true)
+    const c2C   = makeSubChart(c2Ref.current,  110, false)
+    const bamsC = makeSubChart(bamsRef.current, 130, true)
 
     var xmaS = loadLayout()?.xmaSettings || DXMA
     const xmaRes1      = main.addSeries(LineSeries, { color:xmaS.res1_color,      lineWidth:xmaS.res1_width,      lineStyle:2, lastValueVisible:false, priceLineVisible:false })
@@ -194,8 +255,13 @@ export default function App() {
     const rviSig = rviC.addSeries(LineSeries, { color:DS.rvi_signal_color, lineWidth:1 })
     const c1L1   = c1C.addSeries(LineSeries,  { color:DC1.line1_color,     lineWidth:2 })
     const c1L2   = c1C.addSeries(LineSeries,  { color:DC1.line2_color,     lineWidth:2 })
-    const c2L1   = c2C.addSeries(LineSeries,  { color:DC2.line1_color,     lineWidth:2 })
-    const c2L2   = c2C.addSeries(LineSeries,  { color:DC2.line2_color,     lineWidth:2 })
+    const c2L1      = c2C.addSeries(LineSeries,   { color:DC2.line1_color, lineWidth:2 })
+    const c2L2      = c2C.addSeries(LineSeries,   { color:DC2.line2_color, lineWidth:2 })
+    const bamsFast  = bamsC.addSeries(LineSeries, { color:'#ffffff',       lineWidth:2 })
+    const bamsSlow  = bamsC.addSeries(LineSeries, { color:'#ff0000',       lineWidth:2 })
+    const bamsTrend = bamsC.addSeries(LineSeries, { color:'#808080',       lineWidth:1 })
+    const bamsUpper = bamsC.addSeries(LineSeries, { color:'#2196f3',       lineWidth:1, lineStyle:2 })
+    const bamsLower = bamsC.addSeries(LineSeries, { color:'#2196f3',       lineWidth:1, lineStyle:2 })
 
     main.subscribeCrosshairMove(function(p) {
       if (p.seriesData && p.seriesData.size > 0) {
@@ -204,17 +270,19 @@ export default function App() {
       }
     })
 
-    chartsRef.current = { main, cciC, rsiC, rviC, c1C, c2C }
+    chartsRef.current = { main, cciC, rsiC, rviC, c1C, c2C, bamsC }
     seriesRef.current = { candles, cciS, rsiS, rviS, rviSig, c1L1, c1L2, c2L1, c2L2,
       xmaPriceline, xmaBreakline, xmaCycleline, xmaTrendline,
-      xmaRes1, xmaSup1, xmaRes2, xmaSup2 }
+      xmaRes1, xmaSup1, xmaRes2, xmaSup2,
+      bamsFast, bamsSlow, bamsTrend, bamsUpper, bamsLower }
 
     const subFirst = [
-      { chart:cciC, series:cciS  },
-      { chart:rsiC, series:rsiS  },
-      { chart:rviC, series:rviS  },
-      { chart:c1C,  series:c1L1  },
-      { chart:c2C,  series:c2L1  },
+      { chart:cciC,  series:cciS    },
+      { chart:rsiC,  series:rsiS    },
+      { chart:rviC,  series:rviS    },
+      { chart:c1C,   series:c1L1   },
+      { chart:c2C,   series:c2L1   },
+      { chart:bamsC, series:bamsFast },
     ]
     const subCharts = subFirst.map(function(x){ return x.chart })
 
@@ -296,13 +364,17 @@ export default function App() {
         chartsRef.current.main.resize(el.clientWidth, el.clientHeight || 400)
       }
       subFirst.forEach(function(item) {
-        const el2 = item.chart === cciC ? cciRef.current
-          : item.chart === rsiC ? rsiRef.current
-          : item.chart === rviC ? rviRef.current
-          : item.chart === c1C  ? c1Ref.current
-          : c2Ref.current
+        const el2 = item.chart === cciC  ? cciRef.current
+          : item.chart === rsiC  ? rsiRef.current
+          : item.chart === rviC  ? rviRef.current
+          : item.chart === c1C   ? c1Ref.current
+          : item.chart === c2C   ? c2Ref.current
+          : bamsRef.current
         if (el2 && el2.clientWidth > 0) {
-          item.chart.resize(el2.clientWidth, item.chart === c1C || item.chart === c2C ? 110 : 90)
+          const h = item.chart === c1C || item.chart === c2C ? 110
+                  : item.chart === bamsC ? 130
+                  : 90
+          item.chart.resize(el2.clientWidth, h)
         }
       })
     })
@@ -310,13 +382,15 @@ export default function App() {
 
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
-    ws.onopen  = function() { setStatus('Connected'); setWsReady(true) }
+    ws.onopen  = function() { setStatus('Connected'); setWsReady(true); ws.send(JSON.stringify({ type: 'get_symbols' })) }
     ws.onclose = function() { setStatus('Disconnected'); setWsReady(false) }
     ws.onerror = function() { setStatus('Error') }
 
     ws.onmessage = function(event) {
       const d = JSON.parse(event.data)
+      if (d.type === 'symbols') { setSymbols(d.symbols || []); return }
       if (d.type !== 'history') return
+      setOptTitle(d.opt_title || null)
       const sr  = seriesRef.current
       const sym = d.symbol || ''
 
@@ -356,8 +430,8 @@ export default function App() {
         if (!signals || !cs) return []
         var out = []
         signals.forEach(function(sig) {
-          if (sig.type === 'buy')  out.push({ time:sig.time+IST_OFFSET, position:'belowBar', color:cs.buy_color  ||'#00ff00', shape:'arrowUp',   size:cs.buy_size  ||2, text:'B' })
-          if (sig.type === 'sell') out.push({ time:sig.time+IST_OFFSET, position:'aboveBar', color:cs.sell_color ||'#ff0000', shape:'arrowDown', size:cs.sell_size ||2, text:'S' })
+          if (sig.type === 'buy'  && cs.buy_arrows)  out.push({ time:sig.time+IST_OFFSET, position:'belowBar', color:cs.buy_color  ||'#00ff00', shape:'arrowUp',   size:cs.buy_size  ||2, text:'B' })
+          if (sig.type === 'sell' && cs.sell_arrows) out.push({ time:sig.time+IST_OFFSET, position:'aboveBar', color:cs.sell_color ||'#ff0000', shape:'arrowDown', size:cs.sell_size ||2, text:'S' })
         })
         return out
       }
@@ -419,18 +493,41 @@ export default function App() {
         })
       }
 
-      var mc   = chartsRef.current.main
+      if (d.bamsbung && d.bamsbung.length > 0) {
+        var bx = function(key) {
+          return d.bamsbung.map(function(b){ return b[key]!==null ? {time:b.time+IST_OFFSET,value:b[key]} : {time:b.time+IST_OFFSET} })
+        }
+        sr.bamsFast.setData(bx('fast'))
+        sr.bamsSlow.setData(bx('slow'))
+        sr.bamsTrend.setData(bx('trend_line'))
+        sr.bamsUpper.setData(bx('upper'))
+        sr.bamsLower.setData(bx('lower'))
+        if (d.bamsbung_sigs && d.bamsbung_sigs.length > 0) {
+          var bamsMarkers = d.bamsbung_sigs.map(function(sig) {
+            return sig.type === 'buy'
+              ? { time:sig.time+IST_OFFSET, position:'belowBar', color:'#00ff00', shape:'arrowUp',   size:2, text:'B' }
+              : { time:sig.time+IST_OFFSET, position:'aboveBar', color:'#ff0000', shape:'arrowDown', size:2, text:'S' }
+          })
+          try {
+            if (window._bamsMarkers) window._bamsMarkers.setMarkers([])
+            window._bamsMarkers = createSeriesMarkers(sr.candles, bamsMarkers)
+          } catch(e) { console.log('bams markers error:', e) }
+        }
+      }
+
+      var mc    = chartsRef.current.main
       var total = d.candles.length
       totalBarsRef.current = total
-      var iv = d.candles.length >= 2 ? (d.candles[1].time - d.candles[0].time) : 0
-      barIntervalRef.current = iv
-      var lastIST = d.candles[total - 1].time + IST_OFFSET
-      lastBarTimeRef.current = lastIST
-      mc.timeScale().setVisibleLogicalRange({ from: total - 121, to: total - 1 + RIGHT_PADDING })
-      setTimeout(function() {
-        var subs = [chartsRef.current.cciC, chartsRef.current.rsiC, chartsRef.current.rviC, chartsRef.current.c1C, chartsRef.current.c2C]
-        subs.forEach(function(c){ try{ c.timeScale().setVisibleLogicalRange({ from: total - 121, to: total - 1 + RIGHT_PADDING }) }catch(e){} })
-      }, 50)
+      if (total >= 2) {
+        var iv = d.candles[1].time - d.candles[0].time
+        barIntervalRef.current = iv
+        lastBarTimeRef.current = d.candles[total - 1].time + IST_OFFSET
+        mc.timeScale().setVisibleLogicalRange({ from: total - 121, to: total - 1 + RIGHT_PADDING })
+        setTimeout(function() {
+          var subs = [chartsRef.current.cciC, chartsRef.current.rsiC, chartsRef.current.rviC, chartsRef.current.c1C, chartsRef.current.c2C, chartsRef.current.bamsC]
+          subs.forEach(function(c){ try{ c.timeScale().setVisibleLogicalRange({ from: total - 121, to: total - 1 + RIGHT_PADDING }) }catch(e){} })
+        }, 50)
+      }
     }
 
     return function() {
@@ -449,11 +546,17 @@ export default function App() {
 
   const handleSymbol = function(sym) {
     setSymbol(sym)
-    send({ type:'change_symbol', symbol:sym, timeframe })
+    setOptTitle(null)
+    send({ type:'change_symbol', symbol:sym, timeframe, leg:legView })
   }
   const handleTF = function(tf) {
     setTimeframe(tf)
-    send({ type:'change_symbol', symbol, timeframe:tf })
+    send({ type:'change_symbol', symbol, timeframe:tf, leg:legView })
+  }
+  const handleLeg = function(lg) {
+    setLegView(lg)
+    setOptTitle(null)
+    send({ type:'change_symbol', symbol, timeframe, leg:lg })
   }
 
   const handleGoLatest = function() {
@@ -591,8 +694,8 @@ export default function App() {
     )
   }
 
-  const refMap   = { 'CCI':cciRef, 'RSI':rsiRef, 'RVI':rviRef, 'EATA CCI×RSI':c1Ref, 'EATA CCI×RVI':c2Ref }
-  const colorMap = { 'CCI':'#e91e63', 'RSI':'#2196f3', 'RVI':'#ff9800', 'EATA CCI×RSI':'#1e90ff', 'EATA CCI×RVI':'#00bcd4' }
+  const refMap   = { 'CCI':cciRef, 'RSI':rsiRef, 'RVI':rviRef, 'EATA CCI×RSI':c1Ref, 'EATA CCI×RVI':c2Ref, 'BAMSBUNG':bamsRef }
+  const colorMap = { 'CCI':'#e91e63', 'RSI':'#2196f3', 'RVI':'#ff9800', 'EATA CCI×RSI':'#1e90ff', 'EATA CCI×RVI':'#00bcd4', 'BAMSBUNG':'#ffffff' }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden', background:'#0a0a0a', fontFamily:'sans-serif' }}>
@@ -633,12 +736,23 @@ export default function App() {
             style={{ background:'#1a1a1a', color:'#888', border:'1px solid #2a2a2a', padding:'3px 7px', borderRadius:'4px', fontSize:'11px', cursor:'pointer', flexShrink:0 }}>
             {screenerVisible ? '◀' : '▶'}
           </button>
-          <span style={{ color:'#d1d4dc', fontWeight:'500', fontSize:'13px', minWidth:'80px' }}>
-            {symbol.replace('NSE_','').replace('_EQ','')}
+          <span style={{ color: optTitle ? '#26a69a' : '#d1d4dc', fontWeight:'500', fontSize:'13px', minWidth:'60px', maxWidth:'200px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {optTitle || symbol.replace('NSE_','').replace('_EQ','')}
           </span>
-          <select value={symbol} onChange={function(e){ handleSymbol(e.target.value) }} style={{ background:'#1a1a1a', color:'#d1d4dc', border:'1px solid #333', padding:'3px 6px', borderRadius:'5px', fontSize:'12px', cursor:'pointer' }}>
-            {SYMBOLS.map(function(s){ return <option key={s} value={s}>{s.replace('NSE_','').replace('_EQ','')}</option> })}
-          </select>
+          <SymbolPicker symbols={symbols} value={symbol} onChange={handleSymbol} />
+          <div style={{ display:'flex', gap:'2px' }}>
+            {['EQ','CE','PE'].map(function(lg) {
+              var isActive = legView === lg
+              return (
+                <button key={lg} onClick={function() { handleLeg(lg) }} style={{
+                  background:   isActive ? '#26a69a22' : 'transparent',
+                  color:        isActive ? '#26a69a'   : '#555',
+                  border:       '1px solid ' + (isActive ? '#26a69a66' : '#333'),
+                  padding:      '2px 7px', borderRadius:'4px', fontSize:'10px', cursor:'pointer', fontWeight: isActive ? '600' : '400',
+                }}>{lg}</button>
+              )
+            })}
+          </div>
           <div style={{ display:'flex', gap:'3px' }}>
             {TIMEFRAMES.map(function(tf){ return <Fragment key={tf}>{btn(timeframe===tf, function(){ handleTF(tf) }, tf)}</Fragment> })}
           </div>
