@@ -37,7 +37,7 @@ const DSD = {
   proven_res_color:'rgba(105,105,105,0.6)',
   weak_width:1, untested_width:1, verified_width:1, proven_width:1,
 }
-const PANES = ['CCI','RSI','RVI','EATA CCI×RSI','EATA CCI×RVI','BAMSBUNG']
+const PANES = ['EATA CCI×RSI','EATA CCI×RVI','BAMSBUNG']
 
 function SymbolPicker({ symbols, value, onChange }) {
   var [open,  setOpen]  = useState(false)
@@ -116,9 +116,6 @@ export default function App() {
   const saved = loadLayout()
 
   const chartRef     = useRef(null)
-  const cciRef       = useRef(null)
-  const rsiRef       = useRef(null)
-  const rviRef       = useRef(null)
   const c1Ref        = useRef(null)
   const c2Ref        = useRef(null)
   const bamsRef      = useRef(null)
@@ -160,7 +157,7 @@ export default function App() {
   const [alerts,       setAlerts]       = useState([])
   const [showAlerts,   setShowAlerts]   = useState(false)
   const [visible,      setVisible]      = useState(saved?.visible || {
-    'CCI':true,'RSI':true,'RVI':true,'EATA CCI×RSI':true,'EATA CCI×RVI':true,'BAMSBUNG':true
+    'EATA CCI×RSI':true,'EATA CCI×RVI':true,'BAMSBUNG':true
   })
   const [screenerVisible, setScreenerVisible] = useState(true)
   const [symbols,      setSymbols]      = useState([])
@@ -226,9 +223,6 @@ export default function App() {
       })
     }
 
-    const cciC = makeSubChart(cciRef.current,  90, false)
-    const rsiC = makeSubChart(rsiRef.current,  90, false)
-    const rviC = makeSubChart(rviRef.current,  90, false)
     const c1C  = makeSubChart(c1Ref.current,  110, false)
     const c2C   = makeSubChart(c2Ref.current,  110, false)
     const bamsC = makeSubChart(bamsRef.current, 130, true)
@@ -249,10 +243,6 @@ export default function App() {
       wickUpColor:'#26a69a', wickDownColor:'#ef5350',
     })
 
-    const cciS   = cciC.addSeries(LineSeries, { color:DS.cci_color,        lineWidth:1 })
-    const rsiS   = rsiC.addSeries(LineSeries, { color:DS.rsi_color,        lineWidth:1 })
-    const rviS   = rviC.addSeries(LineSeries, { color:DS.rvi_color,        lineWidth:1 })
-    const rviSig = rviC.addSeries(LineSeries, { color:DS.rvi_signal_color, lineWidth:1 })
     const c1L1   = c1C.addSeries(LineSeries,  { color:DC1.line1_color,     lineWidth:2 })
     const c1L2   = c1C.addSeries(LineSeries,  { color:DC1.line2_color,     lineWidth:2 })
     const c2L1      = c2C.addSeries(LineSeries,   { color:DC2.line1_color, lineWidth:2 })
@@ -270,18 +260,15 @@ export default function App() {
       }
     })
 
-    chartsRef.current = { main, cciC, rsiC, rviC, c1C, c2C, bamsC }
-    seriesRef.current = { candles, cciS, rsiS, rviS, rviSig, c1L1, c1L2, c2L1, c2L2,
+    chartsRef.current = { main, c1C, c2C, bamsC }
+    seriesRef.current = { candles, c1L1, c1L2, c2L1, c2L2,
       xmaPriceline, xmaBreakline, xmaCycleline, xmaTrendline,
       xmaRes1, xmaSup1, xmaRes2, xmaSup2,
       bamsFast, bamsSlow, bamsTrend, bamsUpper, bamsLower }
 
     const subFirst = [
-      { chart:cciC,  series:cciS    },
-      { chart:rsiC,  series:rsiS    },
-      { chart:rviC,  series:rviS    },
-      { chart:c1C,   series:c1L1   },
-      { chart:c2C,   series:c2L1   },
+      { chart:c1C,   series:c1L1    },
+      { chart:c2C,   series:c2L1    },
       { chart:bamsC, series:bamsFast },
     ]
     const subCharts = subFirst.map(function(x){ return x.chart })
@@ -364,16 +351,11 @@ export default function App() {
         chartsRef.current.main.resize(el.clientWidth, el.clientHeight || 400)
       }
       subFirst.forEach(function(item) {
-        const el2 = item.chart === cciC  ? cciRef.current
-          : item.chart === rsiC  ? rsiRef.current
-          : item.chart === rviC  ? rviRef.current
-          : item.chart === c1C   ? c1Ref.current
+        const el2 = item.chart === c1C   ? c1Ref.current
           : item.chart === c2C   ? c2Ref.current
           : bamsRef.current
         if (el2 && el2.clientWidth > 0) {
-          const h = item.chart === c1C || item.chart === c2C ? 110
-                  : item.chart === bamsC ? 130
-                  : 90
+          const h = item.chart === bamsC ? 130 : 110
           item.chart.resize(el2.clientWidth, h)
         }
       })
@@ -398,12 +380,6 @@ export default function App() {
         return { time:c.time+IST_OFFSET, open:c.open, high:c.high, low:c.low, close:c.close }
       }))
 
-      if (d.indicators) {
-        sr.cciS.setData(  d.indicators.map(function(i){ return i.cci        !==null ? {time:i.time+IST_OFFSET,value:i.cci}        : {time:i.time+IST_OFFSET} }))
-        sr.rsiS.setData(  d.indicators.map(function(i){ return i.rsi        !==null ? {time:i.time+IST_OFFSET,value:i.rsi}        : {time:i.time+IST_OFFSET} }))
-        sr.rviS.setData(  d.indicators.map(function(i){ return i.rvi        !==null ? {time:i.time+IST_OFFSET,value:i.rvi}        : {time:i.time+IST_OFFSET} }))
-        sr.rviSig.setData(d.indicators.map(function(i){ return i.rvi_signal !==null ? {time:i.time+IST_OFFSET,value:i.rvi_signal} : {time:i.time+IST_OFFSET} }))
-      }
       if (d.custom1) {
         sr.c1L1.setData(d.custom1.map(function(c){ return c.line1!==null ? {time:c.time+IST_OFFSET,value:c.line1} : {time:c.time+IST_OFFSET} }))
         sr.c1L2.setData(d.custom1.map(function(c){ return c.line2!==null ? {time:c.time+IST_OFFSET,value:c.line2} : {time:c.time+IST_OFFSET} }))
@@ -524,7 +500,7 @@ export default function App() {
         lastBarTimeRef.current = d.candles[total - 1].time + IST_OFFSET
         mc.timeScale().setVisibleLogicalRange({ from: total - 121, to: total - 1 + RIGHT_PADDING })
         setTimeout(function() {
-          var subs = [chartsRef.current.cciC, chartsRef.current.rsiC, chartsRef.current.rviC, chartsRef.current.c1C, chartsRef.current.c2C, chartsRef.current.bamsC]
+          var subs = [chartsRef.current.c1C, chartsRef.current.c2C, chartsRef.current.bamsC]
           subs.forEach(function(c){ try{ c.timeScale().setVisibleLogicalRange({ from: total - 121, to: total - 1 + RIGHT_PADDING }) }catch(e){} })
         }, 50)
       }
@@ -694,8 +670,8 @@ export default function App() {
     )
   }
 
-  const refMap   = { 'CCI':cciRef, 'RSI':rsiRef, 'RVI':rviRef, 'EATA CCI×RSI':c1Ref, 'EATA CCI×RVI':c2Ref, 'BAMSBUNG':bamsRef }
-  const colorMap = { 'CCI':'#e91e63', 'RSI':'#2196f3', 'RVI':'#ff9800', 'EATA CCI×RSI':'#1e90ff', 'EATA CCI×RVI':'#00bcd4', 'BAMSBUNG':'#ffffff' }
+  const refMap   = { 'EATA CCI×RSI':c1Ref, 'EATA CCI×RVI':c2Ref, 'BAMSBUNG':bamsRef }
+  const colorMap = { 'EATA CCI×RSI':'#1e90ff', 'EATA CCI×RVI':'#00bcd4', 'BAMSBUNG':'#ffffff' }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', height:'100vh', overflow:'hidden', background:'#0a0a0a', fontFamily:'sans-serif' }}>
@@ -809,30 +785,15 @@ export default function App() {
         {showSettings && (
           <div style={{ background:'#111', borderBottom:'1px solid #222', padding:'12px', overflowY:'auto', maxHeight:'60vh' }}>
             <div style={{ display:'flex', gap:'6px', marginBottom:'12px', flexWrap:'wrap' }}>
-              {['indicators','eata1','eata2','xma','sd'].map(function(tab){
+              {['eata1','eata2','xma','sd'].map(function(tab){
                 return (
                   <button key={tab} onClick={function(){ setActiveTab(tab) }} style={{ background:activeTab===tab?'#26a69a':'#1a1a1a', color:activeTab===tab?'#000':'#aaa', border:'1px solid #333', padding:'4px 10px', borderRadius:'5px', fontSize:'11px', cursor:'pointer' }}>
-                    {tab==='indicators'?'Indicators':tab==='eata1'?'EATA RSI':tab==='eata2'?'EATA RVI':tab==='xma'?'XMA':'Supply/Demand'}
+                    {tab==='eata1'?'EATA RSI':tab==='eata2'?'EATA RVI':tab==='xma'?'XMA':'Supply/Demand'}
                   </button>
                 )
               })}
             </div>
 
-            {activeTab==='indicators' && (
-              <div style={{ display:'flex', gap:'24px', flexWrap:'wrap' }}>
-                {[['CCI','cci_period','cci_color'],['RSI','rsi_period','rsi_color'],['RVI','rvi_period','rvi_color']].map(function(item){
-                  var label=item[0], pKey=item[1], cKey=item[2]
-                  return (
-                    <div key={label}>
-                      <div style={{ color:tmpS[cKey], fontSize:'12px', marginBottom:'6px' }}>{label}</div>
-                      <div style={row}>Period {n(tmpS[pKey], function(v){ setTmpS(Object.assign({},tmpS,{[pKey]:v})) })}</div>
-                      <div style={row}>Color  {cl(tmpS[cKey],function(v){ setTmpS(Object.assign({},tmpS,{[cKey]:v})) })}</div>
-                      {label==='RVI' && <div style={row}>Signal {cl(tmpS.rvi_signal_color,function(v){ setTmpS(Object.assign({},tmpS,{rvi_signal_color:v})) })}</div>}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
             {activeTab==='eata1' && <CustomBlock tmp={tmpC1} setTmp={setTmpC1} isRvi={false} />}
             {activeTab==='eata2' && <CustomBlock tmp={tmpC2} setTmp={setTmpC2} isRvi={true}  />}
 
